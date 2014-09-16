@@ -20,7 +20,16 @@ import re
 import sys
 from collections import defaultdict
 from xml.sax.saxutils import escape
+from pyproj import Proj, transform
 
+
+def irishgridtowgs84(x, y):
+    '''Given a coordinate in Irish x,y, return it in wgs84'''
+    irishgrid = Proj("+init=EPSG:29902")
+    wgs84 = Proj(proj='latlong',datum='WGS84')
+    pos = transform(irishgrid, wgs84, x, y)
+    # lat, lon are then pos[1], pos[0]
+    return pos[1], pos[0]
 
 def tag(key, value):
     '''Given a key and a value, print osm tag'''
@@ -191,6 +200,8 @@ class BelfastTreeContentHandler(xml.sax.ContentHandler):
                     "spreadradiusinmetres",
                     "longitude",
                     "latitude",
+                    "treelocationx",
+                    "treelocationy",
                     "treetag",
                     "treeheightinmetres"
                     ]:
@@ -220,7 +231,8 @@ class BelfastTreeContentHandler(xml.sax.ContentHandler):
         elif name == "belfasttrees":  # tree is done, print everything
             if "latitude" not in self.tree and "longitude" in self.tree:
                 raise Exception("Tree without lat/lon!")
-            print '    <node id=\'-{}\' timestamp=\'2012-05-30T09:25:57\' visible=\'true\' lat=\'{}\' lon=\'{}\'>'.format(self.nodeid, self.tree["latitude"], self.tree["longitude"])
+            mylat, mylon = irishgridtowgs84(self.tree["treelocationx"], self.tree["treelocationy"])
+            print '    <node id=\'-{}\' timestamp=\'2012-05-30T09:25:57\' visible=\'true\' lat=\'{}\' lon=\'{}\'>'.format(self.nodeid, mylat, mylon)
             tag('natural', 'tree')
             # data imported as-is
             if "speciestype" in self.tree:
@@ -254,7 +266,7 @@ class BelfastTreeContentHandler(xml.sax.ContentHandler):
                     if self.genus:
                         tag('genus', self.genus)
                     if self.treetype:
-                        tag('type', self.treetype)
+                        tag('leaf_type', self.treetype)
                     if self.tree["denotation"]:
                         tag('denotation', self.tree["denotation"])
                 else:
@@ -263,9 +275,9 @@ class BelfastTreeContentHandler(xml.sax.ContentHandler):
                 tag('circumference', str(float(self.tree["diameterincentimetres"])/100))
             if "spreadradiusinmetres" in self.tree:
                 tag('diameter_crown', self.tree["spreadradiusinmetres"])
-            if "treetag" in self.tree:
-                if self.tree["species"] != '0':
-                    tag('ref:belfastcitycouncil', self.tree["treetag"])
+            # if "treetag" in self.tree:
+            #     if self.tree["species"] != '0':
+            #         tag('ref:belfastcitycouncil', self.tree["treetag"])
             if "treeheightinmetres" in self.tree:
                 self.height = int(self.tree["treeheightinmetres"].split('.')[0])
                 if self.height > 0:
